@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="中小会计师事务所员工工资与项目提成结算系统（纯前端、本地存储、可部署 GitHub Pages）" />
+    <title>工资与项目提成结算（本地版）</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="presentation">
+              <defs>
+                <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0" stop-color="#2d66ff" />
+                  <stop offset="1" stop-color="#1b37b8" />
+                </linearGradient>
+              </defs>
+              <path
+                fill="url(#g)"
+                d="M10 10a6 6 0 0 1 6-6h16a6 6 0 0 1 6 6v28a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6V10z"
+              />
+              <path
+                fill="rgba(255,255,255,.9)"
+                d="M16 18a2 2 0 0 1 2-2h12a2 2 0 1 1 0 4H18a2 2 0 0 1-2-2zm0 8a2 2 0 0 1 2-2h12a2 2 0 1 1 0 4H18a2 2 0 0 1-2-2zm0 8a2 2 0 0 1 2-2h8a2 2 0 1 1 0 4h-8a2 2 0 0 1-2-2z"
+              />
+            </svg>
+          </div>
+          <div>
+            <h1>工资与项目提成结算</h1>
+            <p class="subtitle">中小会计师事务所 · 纯前端单页 · 数据保存在本机浏览器</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button type="button" class="nav-btn is-active" data-route="workbench">工作台</button>
+          <button type="button" class="nav-btn" data-route="settings">基础配置</button>
+          <button type="button" class="nav-btn" data-route="help">使用帮助</button>
+        </nav>
+      </header>
+
+      <main class="main">
+        <section id="view-workbench" class="view is-active" aria-label="工作台">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>当月工资总览</h2>
+                <p>一屏掌握员工、项目、工资与结算进度。默认显示当前月份，可随时切换历史月份回溯编辑。</p>
+              </div>
+              <div class="toolbar">
+                <label class="field">
+                  <span>查看月份</span>
+                  <input id="wb-month" type="month" />
+                </label>
+                <button id="wb-lock-toggle" class="btn btn-secondary" type="button">锁定当月</button>
+                <button id="wb-export-backup" class="btn btn-ghost" type="button">导出备份</button>
+                <label class="btn btn-ghost btn-file">
+                  导入恢复
+                  <input id="wb-import-backup" type="file" accept="application/json" hidden />
+                </label>
+              </div>
+            </div>
+
+            <div id="wb-summary" class="summary-grid"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>项目台账总表</h2>
+                <p>项目按“登记 → 跟踪 → 完成 → 合保 → 结算锁定”流转。提成自动计算，多人分配自动拆分。</p>
+              </div>
+              <div class="toolbar">
+                <button id="wb-add-project" class="btn btn-primary" type="button">新增项目</button>
+                <button id="wb-export-csv" class="btn btn-secondary" type="button">导出 CSV</button>
+              </div>
+            </div>
+
+            <div class="filters">
+              <label class="field">
+                <span>按员工筛选</span>
+                <select id="filter-employee"></select>
+              </label>
+              <label class="field">
+                <span>按项目状态</span>
+                <select id="filter-status">
+                  <option value="all">全部</option>
+                  <option value="in_progress">进行中</option>
+                  <option value="completed">已完成</option>
+                  <option value="settled">已结算</option>
+                </select>
+              </label>
+              <label class="field field-grow">
+                <span>搜索项目</span>
+                <input id="filter-keyword" placeholder="输入项目名称关键词" />
+              </label>
+            </div>
+
+            <div class="table-wrap">
+              <table class="table" id="project-table">
+                <thead>
+                  <tr>
+                    <th>项目名称</th>
+                    <th>项目类别</th>
+                    <th class="num">项目金额</th>
+                    <th>负责员工</th>
+                    <th>开始时间</th>
+                    <th>结束时间</th>
+                    <th class="num">项目工时</th>
+                    <th>完成状态</th>
+                    <th>结算状态</th>
+                    <th class="num">提成金额</th>
+                    <th class="actions">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="project-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>员工当月工资明细表</h2>
+                <p>当月工资 = 基础工资 + 当月提成 ± 调整项。点击员工姓名可在当前页展开查看项目提成明细。</p>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="table" id="salary-table">
+                <thead>
+                  <tr>
+                    <th>员工姓名</th>
+                    <th class="num">基础工资</th>
+                    <th class="num">项目提成合计</th>
+                    <th class="num">考勤调整</th>
+                    <th class="num">个人社保</th>
+                    <th class="num">实发工资</th>
+                  </tr>
+                </thead>
+                <tbody id="salary-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-settings" class="view" aria-label="基础配置">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>基础配置（低频）</h2>
+                <p>首次使用或调整规则时在此维护。左侧配置项目提成规则，右侧维护员工档案。</p>
+              </div>
+              <div class="toolbar">
+                <button id="settings-clear" class="btn btn-danger" type="button">清空全部数据</button>
+              </div>
+            </div>
+
+            <div class="settings-grid">
+              <section class="subpanel">
+                <div class="subpanel-head">
+                  <div>
+                    <h3>项目提成规则配置</h3>
+                    <p>支持新增/编辑/删除项目分类，按固定金额或项目金额比例计提。</p>
+                  </div>
+                  <button id="cfg-add-category" class="btn btn-secondary" type="button">新增分类</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>分类名称</th>
+                        <th>计提方式</th>
+                        <th class="num">默认值</th>
+                        <th class="actions">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="category-tbody"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="subpanel">
+                <div class="subpanel-head">
+                  <div>
+                    <h3>员工档案管理</h3>
+                    <p>字段：姓名、岗位、月基础工资、联系方式、备注。用于项目指派与工资核算下拉选择。</p>
+                  </div>
+                  <div class="toolbar">
+                    <button id="cfg-batch-delete-employees" class="btn btn-danger" type="button">批量删除</button>
+                    <button id="cfg-add-employee" class="btn btn-secondary" type="button">新增员工</button>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th class="checkbox-col">
+                          <input id="employee-select-all" type="checkbox" aria-label="全选员工" />
+                        </th>
+                        <th>员工姓名</th>
+                        <th>岗位</th>
+                        <th class="num">月基础工资</th>
+                        <th class="actions">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="employee-tbody"></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div class="footer-hint">
+              <p>
+                提示：本系统为纯前端本地运行版。每个访问者的数据只保存在自己浏览器里，访问者之间互不共享。如需多人共享数据，需要另行增加后端或同步方案。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-help" class="view" aria-label="使用帮助">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>使用帮助</h2>
+                <p>这是一份给中年管理者准备的傻瓜式说明。照着 4 个步骤操作，就能把项目、提成和工资顺下来。</p>
+              </div>
+            </div>
+
+            <div class="help-grid">
+              <article class="help-card">
+                <div class="help-icon">⚙</div>
+                <div>
+                  <h3>第一步：基础配置</h3>
+                  <p>先到“基础配置”设置项目提成规则，再录入员工档案。分类和员工只要建好一次，后续新增项目时都会自动调用。</p>
+                  <ul class="help-list">
+                    <li>先新增项目分类，如理账、审计、报税、工商注册</li>
+                    <li>给每个分类设置固定金额或比例提成</li>
+                    <li>录入员工姓名、岗位、月基础工资、联系方式</li>
+                  </ul>
+                  <div class="help-note">设置一次，后续自动调用。</div>
+                </div>
+              </article>
+
+              <article class="help-card">
+                <div class="help-icon">🧾</div>
+                <div>
+                  <h3>第二步：登记项目与自动算提成</h3>
+                  <p>回到“工作台”，点“新增项目”，选择项目类别后系统会自动带出提成规则，并实时算出项目提成金额。</p>
+                  <ul class="help-list">
+                    <li>填项目名称、项目金额、开始时间、工时</li>
+                    <li>选项目类别后，系统自动带出提成比例或固定金额</li>
+                    <li>可给一个项目分配多名员工，按比例或固定金额拆分</li>
+                  </ul>
+                  <div class="help-note">选好类别自动算钱，不用手动算。</div>
+                </div>
+              </article>
+
+              <article class="help-card">
+                <div class="help-icon">✓</div>
+                <div>
+                  <h3>第三步：项目完成与工资自动汇总</h3>
+                  <p>项目做完后，把状态改成“已完成”，再做合保通过。通过后提成会自动进入当月工资；结算后项目数据会锁定。</p>
+                  <ul class="help-list">
+                    <li>“进行中”改成“已完成”</li>
+                    <li>点“合保通过”，未通过则不能发提成</li>
+                    <li>工资表里可直接查看每位员工当月实发工资</li>
+                  </ul>
+                  <div class="help-note">点一下完成，工资自动算好。</div>
+                </div>
+              </article>
+
+              <article class="help-card">
+                <div class="help-icon">💾</div>
+                <div>
+                  <h3>第四步：数据备份与恢复</h3>
+                  <p>工作台右上角有“导出备份”和“导入恢复”。导出的文件建议定期保存到电脑或网盘，换电脑前一定要先备份。</p>
+                  <ul class="help-list">
+                    <li>点“导出备份”保存一份完整 JSON 文件</li>
+                    <li>新电脑或恢复数据时，点“导入恢复”选择备份文件</li>
+                    <li>导入后页面会立刻恢复到备份时的状态</li>
+                  </ul>
+                  <div class="help-note">换电脑、清缓存前一定要备份。</div>
+                </div>
+              </article>
+            </div>
+
+            <div class="faq-panel">
+              <h3>常见问题</h3>
+              <div class="faq-list">
+                <div class="faq-item">
+                  <strong>换电脑数据不见了怎么办？</strong>
+                  <p>本系统数据只存在本机浏览器里，换电脑前必须先点“导出备份”，再到新电脑点“导入恢复”。</p>
+                </div>
+                <div class="faq-item">
+                  <strong>提成金额想手动改怎么操作？</strong>
+                  <p>编辑项目时可以直接改“提成规则”和“规则值”，也可以把员工分配改成固定金额，系统会重新计算。</p>
+                </div>
+                <div class="faq-item">
+                  <strong>月份选错了怎么调整？</strong>
+                  <p>在工作台顶部切换查看月份，或编辑项目时改“所属月份”，工资表会自动按新月份重新汇总。</p>
+                </div>
+                <div class="faq-item">
+                  <strong>数据删错了能恢复吗？</strong>
+                  <p>如果删前做过“导出备份”，可以用“导入恢复”找回；如果没有备份，本地删除后通常无法恢复，所以建议定期备份。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="modal-root" class="modal-root" hidden>
+      <div class="modal-mask" data-action="close"></div>
+      <div class="modal">
+        <div class="modal-head">
+          <h3 id="modal-title">编辑</h3>
+          <button class="icon-btn" type="button" data-action="close" aria-label="关闭弹窗">
+            ×
+          </button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
